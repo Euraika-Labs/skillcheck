@@ -99,14 +99,18 @@ def scan_corpus(
             continue
         target = Target(kind=classify(entry.path, content), path=entry.key, content=content)
         findings = scan_target(target)
+        lines = target.lines
         for f in findings:
             if f.fingerprint in known_fingerprints:
                 continue
+            lo = max(0, f.line - 3)
+            hi = min(len(lines), f.line + 2)
             record = {
                 **f.model_dump(),
                 "repo": entry.repo,
                 "path_in_repo": entry.path,
                 "html_url": entry.html_url,
+                "context": lines[lo:hi],
             }
             (open_dir / f"{f.fingerprint[:16]}.json").write_text(
                 json.dumps(record, indent=2) + "\n", encoding="utf-8"

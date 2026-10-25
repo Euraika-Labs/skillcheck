@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from skillcheck.models import Confidence, Finding, Severity, Target, TargetKind
-from skillcheck.rules.base import Rule, iter_line_matches
+from skillcheck.rules.base import Rule
 
 # Zero-width and directional-override characters: invisible in every editor,
 # they can alter what a model reads versus what a human sees.
@@ -12,6 +12,10 @@ _INVISIBLE_RE = re.compile(
     "\u202a\u202b\u202c\u202d\u202e"
     "\u2066\u2067\u2068\u2069]"
 )
+
+# ZWJ (U+200D) is part of normal emoji sequences (e.g. 👩‍💻); only flag it
+# when it is not joining emoji codepoints.
+_EMOJI_RE = re.compile("[\U0001f000-\U0001faff\u2600-\u27bf\u2b00-\u2bff]")
 
 _DESCRIPTIONS = {
     "\u200b": "ZERO WIDTH SPACE",
@@ -33,6 +37,19 @@ _DESCRIPTIONS = {
 }
 
 
+def _visible_invisibles(line: str) -> list[str]:
+    found: list[str] = []
+    for m in _INVISIBLE_RE.finditer(line):
+        ch = m.group(0)
+        if ch == "\u200d":
+            prev = line[m.start() - 1] if m.start() > 0 else ""
+            nxt = line[m.end()] if m.end() < len(line) else ""
+            if (prev and _EMOJI_RE.match(prev)) or (nxt and _EMOJI_RE.match(nxt)):
+                continue  # ZWJ joining an emoji sequence
+        found.append(ch)
+    return found
+
+
 class HiddenInvisibleCharacters(Rule):
     rule_id = "SC001"
     title = "Hidden invisible characters"
@@ -46,18 +63,19 @@ class HiddenInvisibleCharacters(Rule):
     }
 
     def scan(self, target: Target) -> list[Finding]:
-        findings = []
-        for line_no, line, _m in iter_line_matches(target.lines, _INVISIBLE_RE):
-            chars = ", ".join(
-                _DESCRIPTIONS.get(ch, f"U+{ord(ch):04X}") for ch in _INVISIBLE_RE.findall(line)
-            )
+        findings: list[Finding] = []
+        for line_no, line in enumerate(target.lines, start=1):
+            chars = _visible_invisibles(line)
+            if not chars:
+                continue
+            names = ", ".join(_DESCRIPTIONS.get(ch, f"U+{ord(ch):04X}") for ch in chars)
             findings.append(
                 self.build_finding(
                     target=target,
                     line=line_no,
                     message=(
                         "Line contains invisible Unicode characters that change what a model "
-                        f"reads without changing what a human sees: {chars}."
+                        f"reads without changing what a human sees: {names}."
                     ),
                     severity=Severity.ERROR,
                     confidence=Confidence.HIGH,
