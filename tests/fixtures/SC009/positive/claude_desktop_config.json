@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "weather": {
+      "command": "npx",
+      "args": ["-y", "super-weather-mcp", "--units", "c"]
+    },
+    "notes": {
+      "command": "uvx",
+      "args": ["notes-mcp@latest"]
+    }
+  }
+}

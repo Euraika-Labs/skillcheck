@@ -2,7 +2,8 @@
 
 > Deterministic scanner for Agent Skills, hooks and MCP server manifests.
 
-**Status: research in progress.** No release yet. The rule set below is the plan, not a feature list.
+**Status: v0.1.0.** 10 rules, each with fixtures that trigger it and fixtures
+that must not. Python 3.12+, `pip install git+https://github.com/Euraika-Labs/skillcheck`.
 
 ## The question
 
@@ -20,13 +21,60 @@ We look for three classes:
 
 Out of scope: the security of the harness itself, and model behaviour once the content is loaded (see [injection-bench](https://github.com/Euraika-Labs/injection-bench)).
 
-## Method
+## Rules
 
-The approach of [ai-slopcheck](https://github.com/Euraika-Labs/ai-slopcheck): rules that produce the same finding on the same input every time, each with a fixture that triggers it and one that must not. Findings are put in front of a human; nothing is auto-fixed or auto-blocked.
+| ID | Rule |
+|---|---|
+| SC001 | Hidden invisible characters (zero-width, bidi overrides) |
+| SC002 | Model-directed instructions hidden in an HTML comment |
+| SC003 | Instructions to suppress or override the operator |
+| SC004 | Network egress in a hook command or startup script |
+| SC005 | Credential source combined with network egress |
+| SC006 | Hook auto-approves tool use |
+| SC007 | Hook matches every event |
+| SC008 | Downloads remote code and executes it |
+| SC009 | Launches a runtime dependency unpinned |
+| SC010 | Accesses secrets or sensitive user data |
+
+Every rule is deterministic: same input, same findings. Each ships with
+fixtures under `tests/fixtures/<rule>/` — a positive set that must trigger
+and a negative set that must stay clean. The negative sets are part of the
+rule, not an afterthought: a rule that cannot show what it does *not* catch
+is not done.
+
+## Usage
+
+Scan a local directory (exits 1 when findings exist):
+
+```bash
+skillcheck scan path/to/skill-or-config
+skillcheck scan path/to/repo --json
+```
+
+List rules:
+
+```bash
+skillcheck rules
+```
+
+Corpus mode — discover new public SKILL.md / hook configs / MCP manifests
+via GitHub code search, scan them, and queue findings as JSON files for
+human triage. Findings are written to disk, never to stdout, so it is safe
+to run in CI with public logs:
+
+```bash
+export GITHUB_TOKEN=...   # code search requires auth
+skillcheck scan-corpus --state-file state.json --out-dir findings
+```
+
+Triage works on the queue directory: `findings/open/` (new), `findings/dismissed/`
+(benign or not a vulnerability), `findings/published/` (coordinated disclosure
+completed, carrying the CVE/GHSA identifier). Moving a file between
+directories is the whole workflow; `scan-corpus` dedupes against all three.
 
 ## What it will not claim
 
-A clean scan is not a security review. Deterministic rules miss novel and obfuscated payloads by construction. We will publish false-positive and false-negative examples next to every rule.
+A clean scan is not a security review. Deterministic rules miss novel and obfuscated payloads by construction. We publish false-positive and false-negative examples next to every rule (the fixtures are the first instalment). Findings are leads for a human, never verdicts.
 
 ## Disclosure
 
