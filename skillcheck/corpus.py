@@ -75,7 +75,11 @@ class GitHubClient:
         return entries
 
     def fetch_content(self, entry: CorpusEntry, ref: str = "HEAD") -> str:
-        url = f"{_RAW}/{entry.repo}/{ref}/{entry.path}"
+        # urllib requires ASCII URLs; repo names and paths in the corpus
+        # can contain non-ASCII characters, so quote both.
+        repo = urllib.parse.quote(entry.repo, safe="/-_.~")
+        path = urllib.parse.quote(entry.path, safe="/-_.~")
+        url = f"{_RAW}/{repo}/{ref}/{path}"
         return self._get(url, accept="text/plain").decode("utf-8", errors="replace")
 
 

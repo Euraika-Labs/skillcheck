@@ -94,7 +94,7 @@ def scan_corpus(
     for entry in fresh:
         try:
             content = client.fetch_content(entry)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             typer.echo(f"  skip {entry.key}: fetch failed ({exc})", err=True)
             continue
         target = Target(kind=classify(entry.path, content), path=entry.key, content=content)
